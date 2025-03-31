@@ -2,20 +2,25 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import os
+from urllib.parse import urlparse
 
-# Flask uygulaması
 app = Flask(__name__)
 
-# CORS ayarı (sadece bu domaine açık)
+# Sadece batuhandurmaz.com'dan gelen istekleri kabul et
 CORS(app, origins=["https://www.batuhandurmaz.com"], methods=["POST", "OPTIONS"], allow_headers=["Content-Type"])
 
-# Google API bilgileri (Railway ortam değişkeni olarak tanımlanacak)
+# Ortam değişkenleri
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
 
-# Google Custom Search ile sorgu yap
+# Arama fonksiyonu
 def search_internal_links(keyword, target_page, num_results=10):
-    query = f"site:{target_page} {keyword} -inurl:{target_page}"
+    parsed_url = urlparse(target_page)
+    domain = parsed_url.netloc  # örnek: www.siteniz.com
+
+    # Sorgu: domainde keyword geçen ama hedef URL olmayan sayfalar
+    query = f'site:{domain} "{keyword}" -inurl:{target_page}'
+
     url = "https://www.googleapis.com/customsearch/v1"
     params = {
         'q': query,
