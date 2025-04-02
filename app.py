@@ -6,19 +6,22 @@ from urllib.parse import urlparse
 
 app = Flask(__name__)
 
-# Sadece batuhandurmaz.com'dan gelen istekleri kabul et
+# CORS ayarı
 CORS(app, origins=["https://www.batuhandurmaz.com"], methods=["POST", "OPTIONS"], allow_headers=["Content-Type"])
 
-# Ortam değişkenleri
+# Google API bilgileri
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 GOOGLE_CSE_ID = os.getenv("GOOGLE_CSE_ID")
 
 # Arama fonksiyonu
 def search_internal_links(keyword, target_page, num_results=10):
     parsed_url = urlparse(target_page)
-    domain = parsed_url.netloc  # örnek: www.siteniz.com
+    domain = parsed_url.netloc
 
-    # Sorgu: domainde keyword geçen ama hedef URL olmayan sayfalar
+    # Ana sayfa direkt girilmişse reddet
+    if parsed_url.path == "/" or parsed_url.path.strip() == "":
+        raise ValueError("Lütfen tam bir sayfa URL'si girin (örneğin: https://site.com/blog/yazi)")
+
     query = f'site:{domain} "{keyword}" -inurl:{target_page}'
 
     url = "https://www.googleapis.com/customsearch/v1"
@@ -28,9 +31,18 @@ def search_internal_links(keyword, target_page, num_results=10):
         'cx': GOOGLE_CSE_ID,
         'num': num_results
     }
+
     response = requests.get(url, params=params)
     data = response.json()
-    return [item['link'] for item in data.get('items', [])]
+
+    # 🔐 Sadece aynı domain'e ait sonuçları filtrele
+    results = []
+    for item in data.get("items", []):
+        link_domain = urlparse(item["link"]).netloc
+        if link_domain == domain:
+            results.append(item["link"])
+
+    return results
 
 # API endpoint
 @app.route("/api/search", methods=["POST"])
@@ -45,6 +57,8 @@ def handle_search():
     try:
         results = search_internal_links(keyword, target_page)
         return jsonify({"results": results})
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
